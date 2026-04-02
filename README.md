@@ -13,7 +13,7 @@
 ## 安装
 
 ```bash
-git clone https://github.com/<your-username>/cls-telegraph.git
+git clone https://github.com/InphinitiZ/cls-telegraph.git
 cd cls-telegraph
 pip install -r requirements.txt
 ```
