@@ -95,6 +95,22 @@ python cls_telegraph.py -h
 - 修复：`filter_args` 中的 `category` 不应传给客户端 `filter_items`（它是 API 层参数）
 - 修复：v1 API 每次最多返回约 20 条，非 live 模式需多次分页请求
 
+### 第七阶段：live 模式正文显示残缺修复
+
+现象：live 模式下，含换行的长正文（如《新闻联播》要闻汇总）只能看到首尾几行残片，中间内容凭空消失。
+
+根因：
+1. `cjk_wrap` 逐字符累计宽度时把 `\n` 当宽度 1 的普通字符塞进当前行，不断行
+2. `render_item_lines` 渲染 `content` 段时直接把整段（含 `\n`）丢给 `cjk_wrap`
+3. 产出的"逻辑行"里嵌着原始 `\n`，`stdscr.addnstr` 把 `\n` 当真换行处理，撑出额外屏幕行
+4. 后续 `display_lines` 按 `body_start + i` 绝对行号绘制，覆盖掉被撑出来的行 → 中间内容被盖掉
+
+修复：
+- `cjk_wrap` 遇到 `\n` 强制断行（应用 `subsequent_indent`），从根上保证产出的每行不含 `\n`
+- 正文截断从硬编码 200 提升到默认 1000，并新增 `--content-limit N` 参数，live 与非 live 共用
+
+非 live 模式没踩到这个坑因为走的是 `print()`，原生处理 `\n`。
+
 ## 电报数据字段
 
 每条电报（roll_data 数组元素）的关键字段：
@@ -120,3 +136,4 @@ python cls_telegraph.py -h
 - v1 API 签名中空字符串参数（如 `category=`）也参与签名计算，不可省略
 - nodeapi 的 `updateTelegraphList` 返回最新数据（用于刷新），`telegraphList` 返回更早数据（分页），但两者数据池都限制在约 50 条
 - v1 API 的 `last_time` 语义是"返回该时间之前的数据"，用于向下分页
+- `cjk_wrap` 现在会把 `\n` 当强制断行，调用方不必再预先 `split("\n")`；新增依赖此行为的调用点直接传含 `\n` 文本即可
