@@ -41,12 +41,18 @@ def display_width(s):
 
 
 def cjk_wrap(text, width, initial_indent="", subsequent_indent=""):
-    """CJK 感知的文本换行，按显示宽度折行"""
+    """CJK 感知的文本换行，按显示宽度折行；\\n 作为强制断行"""
     lines = []
     indent = initial_indent
     line = indent
     line_w = display_width(indent)
     for ch in text:
+        if ch == "\n":
+            lines.append(line)
+            indent = subsequent_indent
+            line = indent
+            line_w = display_width(indent)
+            continue
         ch_w = 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
         if line_w + ch_w > width:
             lines.append(line)
@@ -152,7 +158,7 @@ def format_time_short(timestamp):
     return datetime.fromtimestamp(timestamp).strftime("%H:%M:%S")
 
 
-def format_terminal(items, show_stock=True):
+def format_terminal(items, show_stock=True, content_limit=1000):
     if not items:
         print("没有找到匹配的电报。")
         return
@@ -170,7 +176,7 @@ def format_terminal(items, show_stock=True):
         print(f"{color}[{format_time(ctime)}] [{level}] {title}{reset}")
 
         if content and content != title and not title.startswith(content[:20]):
-            display = content[:200] + ("..." if len(content) > 200 else "")
+            display = content[:content_limit] + ("..." if len(content) > content_limit else "")
             print(f"  {display}")
 
         if show_stock and item.get("stock_list"):
@@ -198,7 +204,7 @@ def format_json(items):
 
 # ── curses live 渲染 ─────────────────────────────────────
 
-def render_item_lines(item, width):
+def render_item_lines(item, width, content_limit=1000):
     """将一条电报渲染为多行 (tag, text) 列表"""
     lines = []
     ctime = item.get("ctime", 0)
@@ -238,7 +244,7 @@ def render_item_lines(item, width):
 
     # 内容（如果和标题不同）
     if content and title and content != title and not title.startswith(content[:20]):
-        display = content[:200] + ("..." if len(content) > 200 else "")
+        display = content[:content_limit] + ("..." if len(content) > content_limit else "")
         for line in cjk_wrap(display, width - 1,
                              initial_indent=indent,
                              subsequent_indent=indent):
@@ -266,7 +272,7 @@ def render_item_lines(item, width):
     return lines
 
 
-def live_monitor(filter_args, interval=15):
+def live_monitor(filter_args, interval=15, content_limit=1000):
     """curses 实时监控模式"""
 
     def _main(stdscr):
@@ -399,7 +405,7 @@ def live_monitor(filter_args, interval=15):
                 first_item = False
                 if it.get("id") in new_ids and len(all_items) > len(new_ids):
                     display_lines.append(("new", " ★ NEW "))
-                display_lines.extend(render_item_lines(it, w))
+                display_lines.extend(render_item_lines(it, w, content_limit=content_limit))
             if search_keyword:
                 update_search()
 
@@ -645,6 +651,8 @@ def main():
     output_group.add_argument("--json", action="store_true", help="输出 JSON 格式")
     output_group.add_argument("--no-stock", action="store_true",
                               help="不显示关联股票信息")
+    output_group.add_argument("--content-limit", type=int, default=1000,
+                              help="正文最大显示字符数（默认 1000）")
 
     follow_group = parser.add_argument_group("实时模式")
     follow_group.add_argument("-f", "--follow", action="store_true",
@@ -669,7 +677,7 @@ def main():
             "before": args.before,
             "category": api_category,
         }
-        live_monitor(filter_kw, interval=args.interval)
+        live_monitor(filter_kw, interval=args.interval, content_limit=args.content_limit)
         return
 
     # 单次获取模式 - 使用 v1 API（自动分页）
@@ -695,7 +703,7 @@ def main():
     if args.json:
         format_json(items)
     else:
-        format_terminal(items, show_stock=not args.no_stock)
+        format_terminal(items, show_stock=not args.no_stock, content_limit=args.content_limit)
 
 
 if __name__ == "__main__":
