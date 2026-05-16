@@ -114,6 +114,7 @@ python cls_telegraph.py -h
 输出:
   --json                 输出 JSON 格式
   --no-stock             不显示关联股票信息
+  --content-limit N      正文最大显示字符数（默认 1000）
 
 实时模式:
   -f, --follow           全屏实时监听新电报（q 退出）
